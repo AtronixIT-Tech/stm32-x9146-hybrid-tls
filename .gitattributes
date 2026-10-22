@@ -1,0 +1,11 @@
+# Normalise line endings on check-in
+* text=auto
+
+# Keep binary files untouched
+*.a binary
+*.o binary
+*.elf binary
+*.bin binary
+*.hex binary
+*.png binary
+*.jpg binary
