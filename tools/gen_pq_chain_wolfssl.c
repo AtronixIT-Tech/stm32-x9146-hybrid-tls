@@ -2,18 +2,21 @@
  * gen_pq_chain_wolfssl.c  --  X9.146 dual-alg cert chain generator
  *
  * Generates a 3-level cert chain where every cert carries BOTH:
- *   Primary signature : ML-DSA-44       (standard X.509 signatureAlgorithm /
- *                                        signatureValue fields)
+ *   Primary signature : ML-DSA (level selected by PQ_LEVEL at compile time:
+ *                                        2 = ML-DSA-44, 3 = ML-DSA-65,
+ *                                        5 = ML-DSA-87; default 2)
+ *                       Occupies the standard X.509 signatureAlgorithm /
+ *                       signatureValue fields.
  *   Alternative sig   : ECDSA-P-256 + SHA-256  (X9.146 extensions:
  *                                        subjectAltPublicKeyInfo  2.5.29.72
  *                                        altSignatureAlgorithm    2.5.29.73
  *                                        altSignatureValue        2.5.29.74)
  *
- *   Root CA (ML-DSA-44 self + ECC self)
+ *   Root CA (ML-DSA self-signed + ECC self-signed)
  *       |
- *       +-- Intermediate CA (ML-DSA-44 signed by root-pq, ECC signed by root-ecc)
+ *       +-- Intermediate CA (ML-DSA signed by root, ECC signed by root)
  *               |
- *               +-- Leaf CN=192.168.0.100 (signed likewise by the intermediate)
+ *               +-- Leaf CN=192.168.0.100 (signed likewise by intermediate)
  *
  * Emits:
  *   out/root_cert.pem  int_cert.pem  leaf_cert.pem
