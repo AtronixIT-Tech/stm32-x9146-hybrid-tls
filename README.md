@@ -156,3 +156,43 @@ This produces `Core/Inc/certs_pqc.h` which is embedded directly into the firmwar
 2. File → Import → General → Existing Projects into Workspace
 3. Browse to the cloned repository root and select it
 4. Build → Project → TLS_X9
+
+---
+
+## Alternative signature test
+
+To verify that wolfSSL checks the ECDSA alternative signature and does not silently ignore it, the generator supports a controlled corruption mode: the leaf certificate's `altSignatureValue` is flipped by one bit **before** the intermediate's ML-DSA primary signature is computed.  This keeps the primary signature valid while making only the ECDSA alternative signature wrong.
+
+### How to run
+
+From the `tools/` directory in MSYS2 (requires wolfSSL built with `--enable-dual-alg-certs`):
+
+```bash
+# Corrupted run — alt sig invalid, primary valid
+CORRUPT_LEAF_ALTSIG=1 PQ_LEVEL=5 ./build_wolfssl_gen.sh
+cp out/certs_pqc.h ../Core/Inc/certs_pqc.h
+# Rebuild firmware in STM32CubeIDE (full clean build), flash, then:
+N=1 ./tools/run_bench.sh    # from repo root
+
+# Control run — both signatures valid
+PQ_LEVEL=5 ./build_wolfssl_gen.sh
+cp out/certs_pqc.h ../Core/Inc/certs_pqc.h
+# Rebuild, flash, then:
+N=1 ./tools/run_bench.sh
+```
+
+After testing, restore the committed chain: `git checkout Core/Inc/certs_pqc.h`
+
+### Results (2026-10-23, wolfSSL 5.9.1, ML-DSA-87 + ECDSA-P256, STM32H723ZG at 550 MHz)
+
+**Corrupted run** (altSignatureValue bit-flipped before primary signature):
+- Client: `wolfSSL_connect error -155, ASN sig error, confirm failure`
+- Server UART: `[tls] handshake FAIL err=-313 (received alert fatal error)`
+
+**Control run** (clean chain, both signatures valid):
+- Client: `SSL connect ok, sending GET...`
+- Server UART: `[tls] handshake OK`
+
+wolfSSL 5.9.1 built with `--enable-dual-alg-certs` **verifies the ECDSA alternative signature** during the TLS handshake.  A corrupted `altSignatureValue` causes a fatal alert (`ASN_SIG_CONFIRM_E`, error −155) on the client and error −313 on the server, which is the expected behaviour for an X9.146 dual-algorithm certificate chain.
+
+Full output is in [`tools/altsig_test_results.txt`](tools/altsig_test_results.txt).
