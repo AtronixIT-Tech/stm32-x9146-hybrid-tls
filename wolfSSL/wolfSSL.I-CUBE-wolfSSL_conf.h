@@ -49,7 +49,7 @@
 /* 4 = Single-Precision Cortex-M ASM.  Accelerates ECC P-256 used in
  * the ECDHE key exchange and the X9.146 ECDSA alt-sig path.  No
  * effect on ML-DSA. */
-#define WOLF_CONF_MATH      4
+#define WOLF_CONF_MATH      6
 
 /*---------- WOLF_CONF_RTOS -----------*/
 #define WOLF_CONF_RTOS      1
@@ -128,7 +128,7 @@
 /* 1 = enable inline Thumb2 ASM for SHA2/SHA3/SHAKE/AES on Cortex-M.
  * Biggest gain path for any ML-DSA level because the Keccak core
  * dominates both sign and verify. */
-#define WOLF_CONF_ARMASM      1
+#define WOLF_CONF_ARMASM      0
 
 /*---------- WOLF_CONF_IO -----------*/
 #define WOLF_CONF_IO      1
