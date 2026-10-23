@@ -21,11 +21,11 @@
  * Emits:
  *   out/root_cert.pem  int_cert.pem  leaf_cert.pem
  *   out/chain_cert.pem                        (leaf + intermediate PEM)
- *   out/leaf_key.der                          (PKCS#8 primary ML-DSA-44 key)
+ *   out/leaf_key.der                          (PKCS#8 primary ML-DSA key, level set by PQ_LEVEL)
  *   out/certs_pqc.h                           (chain_cert_pem[] / leaf_key_der[])
  *
  * At handshake time the STM32 server still signs CertificateVerify with
- * ML-DSA-44 only.  The alt sigs live entirely inside the chain.  Peers
+ * the primary ML-DSA key only.  The alt sigs live entirely inside the chain.  Peers
  * that understand X9.146 (wolfSSL built --enable-dual-alg-certs) verify
  * BOTH chains; peers that don't, treat the three extensions as unknown
  * non-critical and accept the chain on the primary sigs alone.
@@ -194,6 +194,12 @@ static void emit_c_array(FILE *f, const char *name,
 /*   This matches wolfSSL's verifier, which strips altSignatureValue   */
 /*   via wc_GeneratePreTBS() and verifies the alt sig over that.       */
 /* ------------------------------------------------------------------ */
+/* Set by main() from the CORRUPT_LEAF_ALTSIG environment variable.
+ * When non-zero, build_dual_cert() flips one bit in the ECDSA
+ * altSignatureValue BEFORE the primary ML-DSA signature is computed,
+ * so the primary signature stays valid and only the alt sig is wrong. */
+static int g_corrupt_altsig = 0;
+
 static int build_dual_cert(Cert           *cert,
                            dilithium_key  *subj_pq,  ecc_key *subj_ecc,
                            dilithium_key  *iss_pq,   ecc_key *iss_ecc,
@@ -347,6 +353,14 @@ static int build_dual_cert(Cert           *cert,
         exit(1);
     }
 
+    /* (4c) TEST ONLY: corrupt the alt sig before the primary signs it.
+     *      The last byte is inside INTEGER s of ECDSA-Sig-Value, so
+     *      flipping its low bit keeps the DER structure valid. */
+    if (g_corrupt_altsig) {
+        alt_sig_bitstr[alt_sig_sz - 1] ^= 0x01;
+        fprintf(stderr, "[!] TEST MODE: flipped low bit of last altSignatureValue byte\n");
+    }
+
     /* (5) PASS 2: plug alt sig in, re-encode TBS with all three X9.146
      *     extensions present.  Since pass-1 and pass-2 share identical
      *     subject/issuer/dates/serial/pubkey/sapki/altSigAlg/extensions,
@@ -363,7 +377,7 @@ static int build_dual_cert(Cert           *cert,
         exit(1);
     }
 
-    /* (6) Sign the final TBS with issuer's primary ML-DSA-44 key. */
+    /* (6) Sign the final TBS with issuer's primary ML-DSA key. */
     signed_sz = wc_SignCert_ex(body_sz, PQ_CTC_SIG,
                                body, sizeof body,
                                PQ_KEY_TYPE, iss_pq, rng);
@@ -461,13 +475,13 @@ int main(void)
 
     printf("wolfSSL %s -- X9.146 dual-alg chain generator\n",
            LIBWOLFSSL_VERSION_STRING);
-    printf("  primary = ML-DSA-44   alt = ECDSA-P256/SHA-256\n");
+    printf("  primary = %s   alt = ECDSA-P256/SHA-256\n", PQ_NAME);
 
     CHECK(wolfCrypt_Init(), "wolfCrypt_Init");
     CHECK(wc_InitRng(&rng), "wc_InitRng");
 
     /* ----- (1) Six keypairs -------------------------------------- */
-    printf("[*] Generating primary ML-DSA-44 keys (x3)...\n");
+    printf("[*] Generating primary %s keys (x3)...\n", PQ_NAME);
     CHECK(make_ml_dsa_44(&root_pq, &rng), "make_ml_dsa_44 root");
     CHECK(make_ml_dsa_44(&int_pq,  &rng), "make_ml_dsa_44 int");
     CHECK(make_ml_dsa_44(&leaf_pq, &rng), "make_ml_dsa_44 leaf");
@@ -513,6 +527,7 @@ int main(void)
     leaf_cert.isCA          = 0;
     leaf_cert.basicConstSet = 1;
     leaf_cert.keyUsage      = KEYUSE_DIGITAL_SIG | KEYUSE_KEY_ENCIPHER;
+    g_corrupt_altsig = (getenv("CORRUPT_LEAF_ALTSIG") != NULL);
     leaf_der_sz = build_dual_cert(&leaf_cert,
                                   &leaf_pq, &leaf_ecc,
                                   &int_pq,  &int_ecc,
@@ -550,9 +565,16 @@ int main(void)
                                             WOLFSSL_FILETYPE_ASN1);
         fprintf(stderr, "chain verify leaf : %d %s\n", r,
                 r == WOLFSSL_SUCCESS ? "OK" : wc_GetErrorString(r));
-        if (r != WOLFSSL_SUCCESS) exit(1);
+        if (g_corrupt_altsig) {
+            if (r == WOLFSSL_SUCCESS)
+                fprintf(stderr, "[!] TEST RESULT: leaf ACCEPTED with bad alt sig -> alt sig NOT checked\n");
+            else
+                fprintf(stderr, "[!] TEST RESULT: leaf REJECTED with bad alt sig -> alt sig checked\n");
+        }
+        else if (r != WOLFSSL_SUCCESS) exit(1);
         wolfSSL_CertManagerFree(cm);
-        printf("[*] Full chain verify OK (primary + alt sigs).\n");
+        if (!g_corrupt_altsig)
+            printf("[*] Full chain verify OK (primary + alt sigs).\n");
     }
 
     /* ----- (5) PEMify -------------------------------------------- */
@@ -572,7 +594,7 @@ int main(void)
                 leaf_key_der_sz, wc_GetErrorString(leaf_key_der_sz));
         exit(1);
     }
-    printf("[*] leaf PKCS#8 ML-DSA-44 private key: %d B\n", leaf_key_der_sz);
+    printf("[*] leaf PKCS#8 %s private key: %d B\n", PQ_NAME, leaf_key_der_sz);
 
     /* ----- (7) Write artifacts ----------------------------------- */
 #ifdef _WIN32

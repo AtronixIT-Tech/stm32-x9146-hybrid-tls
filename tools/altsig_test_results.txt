@@ -1,0 +1,50 @@
+Alternative signature verification test — 2026-10-23
+=====================================================
+
+Chain: ML-DSA-87 (primary) + ECDSA-P256/SHA-256 (alternative), 3-level, PQ_LEVEL=5
+Method: CORRUPT_LEAF_ALTSIG=1 env var passed to gen_pq_chain_wolfssl
+        One bit in the leaf's ECDSA altSignatureValue is flipped BEFORE the
+        intermediate's ML-DSA-87 primary signature is computed, so the primary
+        signature remains valid and only the ECDSA alternative signature is wrong.
+
+--- CORRUPTED RUN (alt sig invalid, primary valid) ---
+
+Generator output (key lines):
+  [!] TEST MODE: flipped low bit of last altSignatureValue byte
+  chain verify int  : 1 OK
+  chain verify leaf : -155 ASN sig error, confirm failure
+  [!] TEST RESULT: leaf REJECTED with bad alt sig -> alt sig checked
+
+wolfSSL client (MSYS2, wolfssl 5.9.1, N=1):
+  wolfSSL_connect error -155, ASN sig error, confirm failure
+  wolfSSL error: wolfSSL_connect failed
+  FAIL: single handshake failed (rc=1)
+
+STM32 UART:
+  [tls] accept from 192.168.0.50:50488
+  [tls] handshake FAIL err=-313 (received alert fatal error)
+
+--- CONTROL RUN (clean chain, both signatures valid) ---
+
+Generator output (key lines):
+  chain verify int  : 1 OK
+  chain verify leaf : 1 OK
+  [*] Full chain verify OK (primary + alt sigs).
+
+wolfSSL client (MSYS2, wolfssl 5.9.1, N=1):
+  Alternate cert chain used
+  SSL version is TLSv1.3
+  SSL cipher suite is TLS_AES_128_GCM_SHA256
+  SSL connect ok, sending GET...
+
+STM32 UART:
+  [tls] TLS 1.3 server listening on :443 (ML-DSA-87 chain)
+  [tls] accept from 192.168.0.50:443
+  [tls] handshake OK
+
+--- CONCLUSION ---
+
+wolfSSL 5.9.1 (--enable-dual-alg-certs) verifies the ECDSA alternative signature
+during the TLS handshake.  A corrupted altSignatureValue causes a fatal alert
+(err=-155 ASN_SIG_CONFIRM_E on the client, err=-313 on the server), which is the
+expected behaviour for an X9.146 dual-algorithm certificate chain.
