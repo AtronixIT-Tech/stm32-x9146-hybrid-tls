@@ -29,7 +29,7 @@ This firmware runs a TLS 1.3 server on an STM32H723ZG microcontroller (Arm Corte
 | Primary | ML-DSA-87 (CRYSTALS-Dilithium) | Post-quantum security |
 | Alternative | ECDSA P-256 | Classical fallback (X9.146) |
 
-A client that understands post-quantum cryptography verifies both. A legacy client verifies only the ECDSA chain and connects normally. This is the **X9.146 hybrid certificate** approach — defined by the ANSI X9 standard — and it allows a smooth migration to post-quantum security without breaking existing clients.
+A client that understands post-quantum cryptography can verify both. A legacy client verifies only the ECDSA chain and connects normally. This is the **X9.146 hybrid certificate** approach — defined by the ANSI X9 standard — and it allows a smooth migration to post-quantum security without breaking existing clients.
 
 ---
 

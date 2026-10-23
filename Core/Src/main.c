@@ -180,8 +180,8 @@ static int uint32_cmp(const void *a, const void *b)
   return (x > y) - (x < y);
 }
 
-/* SYSCLK = 192 MHz on NUCLEO-H723. DWT CYCCNT ticks at the core clock.
- * 32-bit CYCCNT wraps at ~22.4 s, which is fine for a single handshake. */
+/* DWT CYCCNT ticks at the core clock (550 MHz after SystemClock_Config).
+ * 32-bit CYCCNT wraps at ~7.8 s, which is fine for a single handshake. */
 #define DWT_HZ  550000000u  /* SYSCLK = 550 MHz after SystemClock_Config */
 
 static void dwt_init(void)
