@@ -118,7 +118,7 @@
 #define WOLF_CONF_TEST      1
 
 /*---------- WOLF_CONF_KYBER -----------*/
-#define WOLF_CONF_KYBER      1
+#define WOLF_CONF_KYBER      0
 
 /*---------- WOLF_CONF_MLDSA -----------*/
 /* 1 = enable ML-DSA (Dilithium) post-quantum signatures (native wolfCrypt) */
